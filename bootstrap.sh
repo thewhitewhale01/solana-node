@@ -32,7 +32,8 @@ step() { echo; echo "--- $* ---"; }
 
 [[ $EUID -eq 0 ]] || die "run as root"
 grep -q 'VERSION_ID="24.04"' /etc/os-release || die "expected Ubuntu 24.04"
-[[ ${#ADMIN_KEY:-} -ge 32 ]] || die "ADMIN_KEY env var (>=32 chars) is required"
+ADMIN_KEY="${ADMIN_KEY:-}"
+[[ ${#ADMIN_KEY} -ge 32 ]] || die "ADMIN_KEY env var (>=32 chars) is required"
 
 PUBLIC_IP=$(curl -4 -fsS --max-time 10 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
 ADMIN_HOST="${ADMIN_HOST:-$(echo "$PUBLIC_IP" | tr . -).sslip.io}"
