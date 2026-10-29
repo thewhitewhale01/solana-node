@@ -1,0 +1,23 @@
+/home/sol/log/validator.log {
+    rotate 7
+    daily
+    maxsize 2G
+    missingok
+    notifempty
+    compress
+    delaycompress
+    postrotate
+        systemctl kill -s USR1 sol.service
+    endscript
+}
+
+/var/log/node-admin/*.log /var/log/node-admin/jobs/*.log {
+    rotate 5
+    weekly
+    maxsize 200M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

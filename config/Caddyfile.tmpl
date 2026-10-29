@@ -1,0 +1,31 @@
+{
+	# fall back to ZeroSSL automatically if Let's Encrypt rate-limits the sslip.io zone
+	email admin@__ADMIN_HOST__
+}
+
+__ADMIN_HOST__ {
+	encode gzip
+
+	# Only the keyed MCP path is proxied. Everything else is a 404.
+	@mcp path /k/*
+	handle @mcp {
+		reverse_proxy 127.0.0.1:8808 {
+			flush_interval -1
+			transport http {
+				read_timeout 600s
+				write_timeout 600s
+			}
+		}
+	}
+
+	handle {
+		respond 404
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+	}
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=node-admin MCP connector (Claude remote operation)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/node-admin/env
+ExecStart=/opt/node-admin/venv/bin/python /opt/node-admin/server.py
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/node-admin/server.log
+StandardError=append:/var/log/node-admin/server.log
+
+[Install]
+WantedBy=multi-user.target

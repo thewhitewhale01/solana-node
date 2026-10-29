@@ -1,0 +1,24 @@
+[Unit]
+Description=Solana non-voting RPC node (agave-validator)
+After=network-online.target mnt-ledger.mount mnt-accounts.mount
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=sol
+Group=sol
+WorkingDirectory=/home/sol
+ExecStart=/home/sol/bin/validator.sh
+# agave needs time to flush accounts/ledger on shutdown
+TimeoutStopSec=300
+KillSignal=SIGINT
+Restart=always
+RestartSec=5
+LimitNOFILE=2000000
+LimitNPROC=2000000
+Environment=RUST_BACKTRACE=1
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
