@@ -15,3 +15,4 @@
 - Bootstrap: apt waits for the dpkg lock (first-boot unattended-upgrades); data disks already labeled LEDGER/ACCOUNTS are mounted instead of re-detected (survives an OS rebuild).
 - Provisioning path switched to Cherry "Rebuild" with cloud-init user-data (no console/SSH needed): user-data fetches bootstrap.sh and runs it under nohup on first boot.
 - 12:58 PT: Rebuild submitted from the portal with user-data (hostname kept as large-sawfly, monitoring enabled). First submit never sent a request (portal UI stuck on spinner); reload + resubmit worked. Server → Deploying.
+- Bootstrap reordered: firewall + node-admin/Caddy now come up before the Agave build, so the connector is reachable during the long compile (previous order left ~20 min blind).

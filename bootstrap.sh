@@ -126,6 +126,52 @@ systemctl enable --now chrony >/dev/null 2>&1 || true
 swapoff -a || true
 sed -i.bak '/\sswap\s/s/^/#/' /etc/fstab
 
+# ------------------------------------------------------------------ firewall
+step "firewall"
+ufw --force reset >/dev/null
+ufw default deny incoming >/dev/null
+ufw default allow outgoing >/dev/null
+ufw allow 22/tcp >/dev/null            # ssh (console/rescue)
+ufw allow 80/tcp >/dev/null            # caddy ACME http-01
+ufw allow 443/tcp >/dev/null           # node-admin connector (caddy)
+ufw allow 8000:8020/tcp >/dev/null     # gossip / tvu / repair / serve-repair
+ufw allow 8000:8020/udp >/dev/null
+# 8899/8900 (RPC/WS) stay closed; the validator binds them to 127.0.0.1 anyway
+ufw --force enable >/dev/null
+systemctl enable --now fail2ban >/dev/null 2>&1 || true
+ufw status | head -20
+
+# ------------------------------------------------------------------ node-admin
+step "node-admin connector"
+mkdir -p /opt/node-admin /etc/node-admin /var/log/node-admin
+if [[ ! -x /opt/node-admin/venv/bin/python ]]; then
+  python3 -m venv /opt/node-admin/venv
+fi
+/opt/node-admin/venv/bin/pip install -q --upgrade pip
+/opt/node-admin/venv/bin/pip install -q -r "$REPO_DIR/node-admin/requirements.txt"
+install -m 0755 "$REPO_DIR/node-admin/server.py" /opt/node-admin/server.py
+cat > /etc/node-admin/env <<EOF
+ADMIN_KEY=$ADMIN_KEY
+ADMIN_HOST=$ADMIN_HOST
+BIND_HOST=127.0.0.1
+BIND_PORT=8808
+EOF
+chmod 0600 /etc/node-admin/env
+install -m 0644 "$REPO_DIR/systemd/node-admin.service" /etc/systemd/system/node-admin.service
+
+sed "s/__ADMIN_HOST__/$ADMIN_HOST/g" "$REPO_DIR/config/Caddyfile.tmpl" > /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1
+# validate runs as root and creates the access log root-owned; hand the dir back to caddy
+install -d -o caddy -g caddy -m 0755 /var/log/caddy
+chown -R caddy:caddy /var/log/caddy
+systemctl daemon-reload
+systemctl enable --now node-admin.service
+systemctl restart caddy
+sleep 2
+systemctl is-active --quiet node-admin.service || { journalctl -u node-admin -n 30 --no-pager; die "node-admin failed to start"; }
+systemctl is-active --quiet caddy || { journalctl -u caddy -n 30 --no-pager; die "caddy failed to start"; }
+echo "node-admin: active   caddy: active"
+
 # ------------------------------------------------------------------ sol user + agave
 step "sol user + Agave"
 id "$SOL_USER" >/dev/null 2>&1 || useradd -m -s /bin/bash "$SOL_USER"
@@ -181,52 +227,6 @@ echo "identity: $(sudo -u $SOL_USER -H "$SOL_BIN/solana-keygen" pubkey "$SOL_HOM
 install -m 0755 -o "$SOL_USER" -g "$SOL_USER" "$REPO_DIR/bin/validator.sh" "$SOL_HOME/bin/validator.sh"
 install -m 0644 "$REPO_DIR/systemd/sol.service" /etc/systemd/system/sol.service
 install -m 0644 "$REPO_DIR/config/logrotate-sol" /etc/logrotate.d/sol
-
-# ------------------------------------------------------------------ firewall
-step "firewall"
-ufw --force reset >/dev/null
-ufw default deny incoming >/dev/null
-ufw default allow outgoing >/dev/null
-ufw allow 22/tcp >/dev/null            # ssh (console/rescue)
-ufw allow 80/tcp >/dev/null            # caddy ACME http-01
-ufw allow 443/tcp >/dev/null           # node-admin connector (caddy)
-ufw allow 8000:8020/tcp >/dev/null     # gossip / tvu / repair / serve-repair
-ufw allow 8000:8020/udp >/dev/null
-# 8899/8900 (RPC/WS) stay closed; the validator binds them to 127.0.0.1 anyway
-ufw --force enable >/dev/null
-systemctl enable --now fail2ban >/dev/null 2>&1 || true
-ufw status | head -20
-
-# ------------------------------------------------------------------ node-admin
-step "node-admin connector"
-mkdir -p /opt/node-admin /etc/node-admin /var/log/node-admin
-if [[ ! -x /opt/node-admin/venv/bin/python ]]; then
-  python3 -m venv /opt/node-admin/venv
-fi
-/opt/node-admin/venv/bin/pip install -q --upgrade pip
-/opt/node-admin/venv/bin/pip install -q -r "$REPO_DIR/node-admin/requirements.txt"
-install -m 0755 "$REPO_DIR/node-admin/server.py" /opt/node-admin/server.py
-cat > /etc/node-admin/env <<EOF
-ADMIN_KEY=$ADMIN_KEY
-ADMIN_HOST=$ADMIN_HOST
-BIND_HOST=127.0.0.1
-BIND_PORT=8808
-EOF
-chmod 0600 /etc/node-admin/env
-install -m 0644 "$REPO_DIR/systemd/node-admin.service" /etc/systemd/system/node-admin.service
-
-sed "s/__ADMIN_HOST__/$ADMIN_HOST/g" "$REPO_DIR/config/Caddyfile.tmpl" > /etc/caddy/Caddyfile
-caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1
-# validate runs as root and creates the access log root-owned; hand the dir back to caddy
-install -d -o caddy -g caddy -m 0755 /var/log/caddy
-chown -R caddy:caddy /var/log/caddy
-systemctl daemon-reload
-systemctl enable --now node-admin.service
-systemctl restart caddy
-sleep 2
-systemctl is-active --quiet node-admin.service || { journalctl -u node-admin -n 30 --no-pager; die "node-admin failed to start"; }
-systemctl is-active --quiet caddy || { journalctl -u caddy -n 30 --no-pager; die "caddy failed to start"; }
-echo "node-admin: active   caddy: active"
 
 # ------------------------------------------------------------------ start the node
 step "start sol.service"
