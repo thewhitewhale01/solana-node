@@ -24,8 +24,10 @@ ACCOUNTS=/mnt/accounts
 SNAPSHOTS=$SOL_HOME/snapshots
 LOG=/var/log/solana-bootstrap.log
 
+# cloud-init / systemd-run give a minimal environment; pin the basics
+export HOME=/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
 exec > >(tee -a "$LOG" | tee /dev/tty1 >/dev/null 2>&1) 2>&1
-trap 'echo "!!! bootstrap exited with status $? at line $LINENO (see $LOG)"' ERR
+trap 'echo "!!! bootstrap failed: status $? at line $LINENO: $BASH_COMMAND"' ERR
 echo "=== solana-node bootstrap started $(date -u +%FT%TZ) ==="
 
 die() { echo "FATAL: $*" >&2; exit 1; }
