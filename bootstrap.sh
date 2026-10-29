@@ -57,12 +57,21 @@ BASE_PKGS=(curl wget git jq bzip2 htop iotop sysstat nvme-cli chrony ufw fail2ba
 apt-get install -y -q "${BASE_PKGS[@]}"
 apt-get install -y -q linux-tools-common "linux-tools-$(uname -r)" 2>/dev/null || true
 
-# Caddy (official repo)
+# Caddy: official repo if reachable, else Ubuntu's own package (universe) — both fine for a TLS reverse proxy
 if ! command -v caddy >/dev/null; then
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update -q && apt-get install -y -q caddy
+  if curl -1sLf --retry 5 --retry-delay 3 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' -o /tmp/caddy-gpg.key \
+     && [[ -s /tmp/caddy-gpg.key ]] \
+     && gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg /tmp/caddy-gpg.key \
+     && curl -1sLf --retry 5 --retry-delay 3 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' -o /etc/apt/sources.list.d/caddy-stable.list; then
+    echo "caddy: using official cloudsmith repo"
+    apt-get update -q
+  else
+    echo "caddy: cloudsmith unreachable, falling back to Ubuntu's caddy package"
+    rm -f /etc/apt/sources.list.d/caddy-stable.list
+  fi
+  apt-get install -y -q caddy
 fi
+echo "caddy: $(caddy version 2>/dev/null | head -1)"
 
 # ------------------------------------------------------------------ repo
 step "repo -> $REPO_DIR"
