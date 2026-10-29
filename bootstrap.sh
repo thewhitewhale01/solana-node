@@ -42,6 +42,8 @@ echo "public ip: $PUBLIC_IP   admin host: $ADMIN_HOST"
 # ------------------------------------------------------------------ packages
 step "apt packages"
 export DEBIAN_FRONTEND=noninteractive
+# first boot: unattended-upgrades / apt-daily may hold the lock for a few minutes
+apt-get() { command apt-get -o DPkg::Lock::Timeout=900 "$@"; }
 apt-get update -q
 BASE_PKGS=(curl wget git jq bzip2 htop iotop sysstat nvme-cli chrony ufw fail2ban
   python3 python3-venv python3-pip logrotate unzip ca-certificates gnupg apt-transport-https
@@ -70,6 +72,16 @@ fi
 # ------------------------------------------------------------------ disks
 step "data disks"
 mkdir -p "$LEDGER" "$ACCOUNTS"
+# Disks formatted by an earlier run (e.g. before an OS rebuild) carry our labels: just mount them.
+for pair in "LEDGER:$LEDGER" "ACCOUNTS:$ACCOUNTS"; do
+  IFS=: read -r label mnt <<<"$pair"
+  if ! mountpoint -q "$mnt" && dev=$(blkid -L "$label" 2>/dev/null) && [[ -n $dev ]]; then
+    echo "found existing $label filesystem on $dev — mounting at $mnt"
+    uuid=$(blkid -o value -s UUID "$dev")
+    grep -q "$uuid" /etc/fstab || echo "UUID=$uuid $mnt ext4 defaults,noatime,nodiratime,nofail 0 2" >> /etc/fstab
+    mount "$mnt"
+  fi
+done
 if [[ "${SKIP_FORMAT:-0}" != "1" ]]; then
   # Candidate: nvme disk, 3.5–4.1 TB, no partitions, no holders (not in md RAID), no fs signature.
   mapfile -t CANDIDATES < <(
