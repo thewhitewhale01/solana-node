@@ -49,7 +49,8 @@ default ledger size limit · Geyser plugin line present but commented out (stage
 
 ## Access
 - Claude connector: `https://84-32-63-98.sslip.io/k/<KEY>/mcp` (key in `/etc/node-admin/env` and `/root/node-admin.url`; never commit it)
-- Root password: Cherry portal (24 h after deploy), then rotate / key-only.
+- Root password: Cherry portal (shown 24 h after each deploy/rebuild). Not needed for day-to-day ops; the connector is the control path.
+- Provisioning: Cherry portal → Actions → Rebuild, with the first-boot script as **User data** (see `userdata.example.sh`). The portal's Rebuild button can sit on a spinner for minutes and may need a page reload + second submit; the server flips to *Deploying* when it has actually taken. No SSH or console needed.
 
 ## Stage 2 — TODO
 - [ ] Build Yellowstone gRPC Geyser plugin matching `agave-validator --version`; config at `/home/sol/yellowstone/config.json`; uncomment flag; restart
