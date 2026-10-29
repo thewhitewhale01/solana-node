@@ -43,12 +43,14 @@ echo "public ip: $PUBLIC_IP   admin host: $ADMIN_HOST"
 step "apt packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q curl wget git jq bzip2 htop iotop sysstat nvme-cli chrony ufw fail2ban \
-  python3 python3-venv python3-pip logrotate unzip ca-certificates gnupg apt-transport-https \
-  debian-keyring debian-archive-keyring linux-tools-common "linux-tools-$(uname -r)" 2>/dev/null || \
-apt-get install -y -q curl wget git jq bzip2 htop iotop sysstat nvme-cli chrony ufw fail2ban \
-  python3 python3-venv python3-pip logrotate unzip ca-certificates gnupg apt-transport-https \
+BASE_PKGS=(curl wget git jq bzip2 htop iotop sysstat nvme-cli chrony ufw fail2ban
+  python3 python3-venv python3-pip logrotate unzip ca-certificates gnupg apt-transport-https
   debian-keyring debian-archive-keyring
+  # Agave build-from-source deps (Anza no longer ships agave-validator pre-built)
+  build-essential pkg-config libssl-dev libudev-dev zlib1g-dev llvm clang cmake make
+  libprotobuf-dev protobuf-compiler libclang-dev)
+apt-get install -y -q "${BASE_PKGS[@]}"
+apt-get install -y -q linux-tools-common "linux-tools-$(uname -r)" 2>/dev/null || true
 
 # Caddy (official repo)
 if ! command -v caddy >/dev/null; then
@@ -124,6 +126,36 @@ fi
 SOL_BIN="$SOL_HOME/.local/share/solana/install/active_release/bin"
 grep -q 'solana/install/active_release/bin' "$SOL_HOME/.profile" || \
   echo "export PATH=\"$SOL_BIN:\$PATH\"" >> "$SOL_HOME/.profile"
+
+# Anza's pre-built release tarball no longer includes agave-validator: build it from source
+# at the exact commit the installer pinned, so it matches the shipped solana/ledger-tool.
+if [[ ! -x "$SOL_BIN/agave-validator" ]]; then
+  step "build agave-validator from source (10-25 min on this box)"
+  REL_DIR=$(readlink -f "$SOL_HOME/.local/share/solana/install/active_release")
+  AGAVE_COMMIT=$(sed -nE 's#.*/releases/stable-([0-9a-f]{7,40})/.*#\1#p' <<<"$REL_DIR")
+  [[ -n $AGAVE_COMMIT ]] || AGAVE_COMMIT=$(sed -nE 's/^commit:\s*([0-9a-f]+).*/\1/p' "$REL_DIR/version.yml" | head -1)
+  [[ -n $AGAVE_COMMIT ]] || die "could not determine Agave release commit from $REL_DIR"
+  echo "agave commit: $AGAVE_COMMIT"
+  sudo -u "$SOL_USER" -H env AGAVE_COMMIT="$AGAVE_COMMIT" SOL_BIN="$SOL_BIN" bash -lc '
+    set -Eeuo pipefail
+    export PATH="$HOME/.cargo/bin:$PATH"
+    if [[ ! -x "$HOME/.cargo/bin/cargo" ]]; then
+      curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal -q
+    fi
+    # shellcheck disable=SC1091
+    source "$HOME/.cargo/env"
+    if [[ ! -d "$HOME/agave/.git" ]]; then
+      git clone -q --filter=blob:none https://github.com/anza-xyz/agave.git "$HOME/agave"
+    fi
+    cd "$HOME/agave"
+    git fetch -q origin "$AGAVE_COMMIT" || git fetch -q origin
+    git checkout -q "$AGAVE_COMMIT"
+    echo "building agave-validator @ $(git rev-parse --short HEAD) with $(nproc) cores"
+    cargo build --release --bin agave-validator 2>&1 | grep -E "^(\s+Compiling|\s+Finished|error|warning: unused)" | tail -n 5
+    install -m 0755 target/release/agave-validator "$SOL_BIN/agave-validator"
+  '
+fi
+
 # make the binaries visible system-wide too (root tooling, node-admin)
 for b in agave-validator solana solana-keygen agave-ledger-tool; do
   ln -sf "$SOL_BIN/$b" /usr/local/bin/$b
@@ -172,19 +204,25 @@ chmod 0600 /etc/node-admin/env
 install -m 0644 "$REPO_DIR/systemd/node-admin.service" /etc/systemd/system/node-admin.service
 
 sed "s/__ADMIN_HOST__/$ADMIN_HOST/g" "$REPO_DIR/config/Caddyfile.tmpl" > /etc/caddy/Caddyfile
-caddy validate --config /etc/caddy/Caddyfile >/dev/null
+caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1
+# validate runs as root and creates the access log root-owned; hand the dir back to caddy
+install -d -o caddy -g caddy -m 0755 /var/log/caddy
+chown -R caddy:caddy /var/log/caddy
 systemctl daemon-reload
 systemctl enable --now node-admin.service
 systemctl restart caddy
 sleep 2
-systemctl is-active node-admin.service caddy
+systemctl is-active --quiet node-admin.service || { journalctl -u node-admin -n 30 --no-pager; die "node-admin failed to start"; }
+systemctl is-active --quiet caddy || { journalctl -u caddy -n 30 --no-pager; die "caddy failed to start"; }
+echo "node-admin: active   caddy: active"
 
 # ------------------------------------------------------------------ start the node
 step "start sol.service"
 systemctl enable sol.service >/dev/null
 systemctl restart sol.service
-sleep 5
-systemctl is-active sol.service || { journalctl -u sol.service -n 50 --no-pager; die "sol.service failed to start"; }
+sleep 8
+systemctl is-active --quiet sol.service || { journalctl -u sol.service -n 50 --no-pager; die "sol.service failed to start"; }
+echo "sol.service: active"
 
 # ------------------------------------------------------------------ done
 step "DONE"

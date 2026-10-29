@@ -24,6 +24,8 @@ into the data warehouse (ClickHouse on a DigitalOcean droplet, to be built).
 | `/home/sol/bin/validator.sh` | **the flags**. Edit → `systemctl restart sol.service` |
 | `/home/sol/validator-keypair.json` | node identity (unfunded; non-voting) |
 | `/opt/solana-node` | clone of this repo on the box |
+| `/home/sol/agave` | Agave source checkout (built at the installer's pinned commit; `agave-validator` is no longer shipped pre-built) |
+| `/home/sol/.cargo`, `~/.rustup` | Rust toolchain for `sol` (needed for Agave + Yellowstone builds) |
 | `/opt/node-admin`, `/etc/node-admin/env` | node-admin MCP connector + its key |
 | `/var/log/node-admin/` | connector call log, background job logs |
 | `/var/log/solana-bootstrap.log` | bootstrap output |
@@ -59,4 +61,5 @@ default ledger size limit · Geyser plugin line present but commented out (stage
 ## Known gotchas
 - Pre-built Cherry configs can't change RAM/disks in place — growth = rebuild onto a bigger plan.
 - Geyser plugin must be built against the exact Agave version; upgrading Agave = rebuild plugin.
+- `agave-validator` is built from source (Anza stopped shipping it in the release tarball). Upgrade = `agave-install update` for the tools, then rebuild the validator at the new pinned commit (bootstrap does this automatically when the binary is missing; delete it to force).
 - First start: snapshot download + account index build takes 1–3 h; `getHealth` returns "behind" until caught up.

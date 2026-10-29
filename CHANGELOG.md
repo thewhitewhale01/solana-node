@@ -9,3 +9,6 @@
 
 ## 2026-10-29 (later)
 - Fix: bootstrap aborted with `bad substitution` on the ADMIN_KEY length check under `set -u`.
+- Fix: Caddy failed to start — `caddy validate` (run as root) created `/var/log/caddy/access.log` root-owned; bootstrap now chowns `/var/log/caddy` to caddy before starting.
+- Fix: Anza's pre-built stable tarball (commit 0f131d3, Agave v4.3 line) no longer ships `agave-validator`. Bootstrap now installs build deps + rustup for `sol` and builds `agave-validator` from source at the exact pinned commit (`~/agave`, blobless clone), installing it into `active_release/bin`.
+- Bootstrap now checks node-admin, caddy and sol.service individually and prints the failing unit's journal.
