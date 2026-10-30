@@ -50,7 +50,8 @@ default ledger size limit · Geyser plugin line present but commented out (stage
 ## Access
 - Claude connector: `https://84-32-63-98.sslip.io/k/<KEY>/mcp` (key in `/etc/node-admin/env` and `/root/node-admin.url`; never commit it)
 - Root password: Cherry portal (shown 24 h after each deploy/rebuild). Not needed for day-to-day ops; the connector is the control path.
-- Provisioning: Cherry portal → Actions → Rebuild, with the first-boot script as **User data** (see `userdata.example.sh`). The portal's Rebuild button can sit on a spinner for minutes and may need a page reload + second submit; the server flips to *Deploying* when it has actually taken. No SSH or console needed.
+- Provisioning: **use the Cherry API, not the portal's Rebuild dialog** — the portal never delivered user-data to the machine in three attempts. `POST https://api.cherryservers.com/v1/servers/1048290/actions` with `{type:"rebuild", image:"ubuntu_24_04_64bit", hostname, password, os_disk:"NVMe 1TB", os_raid_level:"Raid 1", os_partition_size:1024, user_data:<base64 of userdata.example.sh>, metrics_install:true}`. Bearer token: Cherry portal → Settings → API keys (`claude-ops`). Password must avoid quotes, backslash, backtick and `!$%&;#^`. Other actions: `reboot`, `power-off`, `power-on`, `enter-rescue-mode`, `create-console-access`.
+- If the box hangs in BIOS POST after a reinstall (`DXE--AHCI Initialization` for minutes), send a Power Reset from the KVM power menu or `{type:"reboot"}` via the API.
 
 ## Stage 2 — TODO
 - [ ] Build Yellowstone gRPC Geyser plugin matching `agave-validator --version`; config at `/home/sol/yellowstone/config.json`; uncomment flag; restart

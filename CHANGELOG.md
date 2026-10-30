@@ -20,3 +20,7 @@
 - Found the first-boot failure: the Caddy repo step (`curl | gpg --dearmor`) dies when the cloudsmith key download returns nothing, which is the step right after apt. Now retried, validated, and falls back to Ubuntu's own caddy package.
 - Attempt-3 user-data (`userdata.example.sh`) starts a boot-log HTTP server on :8010 (masked copy of the bootstrap log) and launches the bootstrap via `systemd-run` so it is independent of cloud-init's unit lifecycle.
 - 13:4x PT: a boot-log HTTP server idea was dropped (unauthenticated public port); the TLS+key connector is the only control channel. Third rebuild submitted with the Caddy fix; user-data launches the bootstrap via `systemd-run` (detached from cloud-init) and records progress in /root/userdata.status.
+
+## 2026-10-30
+- 06:4x PT: Portal rebuilds (3x) never delivered user-data to the box (cloud-init reported none). Switched to the Cherry API: `POST /v1/servers/1048290/actions {type: rebuild, image: ubuntu_24_04_64bit, user_data: <base64>, metrics_install: true}` -> 201, status deploying. API constraints learned: password charset excludes quotes, backslash, backtick, `!$%&;#^`; `metrics_install` is a JSON boolean. API calls are made from the user's Chrome (sandbox egress is blocked); token lives in Cherry -> Settings -> API keys (`claude-ops`).
+- Also learned: the box hung in BIOS POST (`DXE--AHCI Initialization`) for 20 min after one reinstall reboot; a Power Reset from the KVM cleared it.
