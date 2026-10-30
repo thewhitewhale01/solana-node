@@ -1,6 +1,8 @@
 # OPS — Solana RPC node (state of the world)
 
-_Last updated: 2026-10-29. Update this file after every change; append to CHANGELOG.md._
+_Last updated: 2026-10-30. Update this file after every change; append to CHANGELOG.md._
+
+> **STATUS: no server.** The Cherry Servers box (id 1048290, 84.32.63.98) was cancelled on 2026-10-30 after five rebuilds in which Cherry's provisioning ignored user-data and the API-set password. Everything below describing that box is historical. The bootstrap, connector and validator config in this repo are provider-agnostic and ready for the next host; see "Next attempt" at the bottom.
 
 ## Purpose
 Self-hosted, non-voting Solana mainnet RPC node. Replaces metered RPC vendors (Helius, Shyft) for all
@@ -65,3 +67,9 @@ default ledger size limit · Geyser plugin line present but commented out (stage
 - Geyser plugin must be built against the exact Agave version; upgrading Agave = rebuild plugin.
 - `agave-validator` is built from source (Anza stopped shipping it in the release tarball). Upgrade = `agave-install update` for the tools, then rebuild the validator at the new pinned commit (bootstrap does this automatically when the binary is missing; delete it to force).
 - First start: snapshot download + account index build takes 1–3 h; `getHealth` returns "behind" until caught up.
+
+## Next attempt — requirements for the host (learned the hard way)
+- Must provision like DigitalOcean: root SSH with a key or a password the portal actually shows, reachable within minutes of creation. Cloud-init/user-data that demonstrably runs, or no reliance on it.
+- Claude's environments cannot open SSH; the control path is the node-admin connector (HTTPS + key in URL). Bring the connector up **first** in the bootstrap, before any long build, so the box is operable within ~3 minutes.
+- Bare metal is still required for a Solana node (512 GB+ RAM, 2× 4 TB NVMe, 10 Gbps). Candidates with DO-like tooling: Latitude.sh (API, `lsh` CLI, Terraform, serial console over SSH, rescue mode), Edgevana, PureVoltage. Verify on day one, before anything else, that user-data or SSH keys actually land on the box.
+- Keep `bin/validator.sh`, `node-admin/`, `systemd/`, `config/` as-is; `bootstrap.sh` needs only host-specific disk detection re-checked (it keys on two blank ~4 TB NVMe drives).
